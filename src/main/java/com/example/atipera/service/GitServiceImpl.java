@@ -1,43 +1,54 @@
 package com.example.atipera.service;
 
 import com.example.atipera.interfaces.GitService;
-import com.example.atipera.mapper.GitMapper;
+import com.example.atipera.model.Branch;
 import com.example.atipera.model.GitRepository;
 import lombok.AllArgsConstructor;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Flux;
 
-import java.io.IOException;
 import java.util.HashSet;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
+
 
 @Service
 @AllArgsConstructor
-@SuppressWarnings("all")
 public class GitServiceImpl implements GitService {
-    private final GitMapper mapper;
-    // tez nie zwracac generykow z Object
-    //lepiej skorzystac z HttpClienta Springowego
+    private WebClient webClient;
+
     @Override
-    public ResponseEntity<Object> repositories(String header, String userName) {
-        Set<GitRepository> response = new HashSet<>();
-        try {
-            response = getRepositories(header, userName);
-        } catch (IOException e) {
-            System.out.println(e.getMessage());
-        }
-        var opt = Optional.ofNullable(response);
-        if (Objects.equals(header, "Accept: application/xml")) {
-            var res = mapper.incorrectHeaderMapper(HttpStatus.resolve(406).value(), "Wrong header value");
-            return new ResponseEntity<>(res, HttpStatus.valueOf(406));
-        } else if (!opt.isPresent() || opt.get().isEmpty()) {
-            var res = mapper.noUserMapper(HttpStatus.resolve(404).value(), "No repository with given user: " + userName);
-            return new ResponseEntity<>(res, HttpStatus.valueOf(404));
-        } else {
-            return new ResponseEntity<>(opt.get(), HttpStatus.OK);
-        }
+    public Flux<GitRepository> getRepositories(String header, String userName) {
+        String[] arr = header.split(": ");
+        webClient = WebClient
+                .builder()
+                .baseUrl("https://api.github.com")
+                .defaultHeader(arr[0], arr[1])
+//                .defaultHeaders(headers -> headers.setBasicAuth("login", "haslo")) // todo te wartosci podac aby moc pobierac prywatne repozytoria
+//                .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + "token")
+                .build();
+
+        var flux = webClient
+                .get()
+                .uri("/users/" + userName + "/repos")
+                .retrieve()
+                .bodyToFlux(GitRepository.class);
+        // collectList() da mi Mono<List<GitRepository>>
+        // a block() zamieni to na List<GitRepository>
+        var f = flux.collectList().block().stream().map(e -> {
+            e.setBranchSet(getBranches(e.getName(), userName));
+            return e;
+        }).collect(Collectors.toSet());
+        return Flux.fromIterable(f);
+    }
+
+    @Override
+    public Set<Branch> getBranches(String name, String userName) {
+        return new HashSet<>(Objects.requireNonNull(webClient.get()
+                .uri("repos/" + userName + "/" + name + "/branches")
+                .retrieve()
+                .bodyToFlux(Branch.class).collectList().block()));
     }
 }

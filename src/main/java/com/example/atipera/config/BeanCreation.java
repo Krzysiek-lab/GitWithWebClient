@@ -4,16 +4,21 @@ import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.web.reactive.function.client.WebClient;
+
 
 @Configuration
-public class Swagger {
+public class BeanCreation {
     @Bean
     public OpenAPI ServerOpenAPI() {
         return new OpenAPI()
                 .info(new Info()
-                        .title("Atipera")
-                        .description("Zadanie próbne"));
+                        .title("Git")
+                        .description("Pobieranie repozytoriów github danego użytkownika"));
     }
-    //tu najlepiej stworzy metody zwracajace beany z ObjectMapperem, StrinBuilserem i
-    //innych ktorych uzywam
+
+    @Bean
+    public WebClient webClient() {
+        return WebClient.create();
+    }
 }
